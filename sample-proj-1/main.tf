@@ -14,7 +14,10 @@ variable avail_zone {}
 variable env_prefix {}
 variable my_ip {}
 variable instance_type {}
-variable public_key_location {}
+# variable public_key_location {}
+variable ansible_master_server{}
+# variable private_key_location{}
+variable ssh_key_private{}
 
 resource "aws_vpc" "myapp-vpc"   {
     cidr_block = var.vpc_cidr_block
@@ -108,15 +111,15 @@ output "ec2_public_ip"    {
     value = aws_instance.myapp-server.public_ip
 }
 
-resource "aws_key_pair" "ssh-key"   {
-    key_name     = "${var.env_prefix}-server-key"
-    # public_key = "${file(var.public_key_location)}"
-    public_key = file(var.public_key_location)
-}
+# resource "aws_key_pair" "ssh-key"   {
+#     key_name     = "${var.env_prefix}-server-key"
+#     # public_key = "${file(var.public_key_location)}"
+#     public_key = file(var.public_key_location)
+# }
 
 resource "aws_instance" "myapp-server"  {
-    # ami = "ami-022e1a32d3f742bd8"
-    ami =  data.aws_ami.latest-amazon-linux-image.id
+    ami = "ami-06b09bfacae1453cb"
+    # ami =  data.aws_ami.latest-amazon-linux-image.id
     instance_type = var.instance_type
 
     subnet_id = aws_subnet.myapp-subnet-1.id
@@ -125,11 +128,50 @@ resource "aws_instance" "myapp-server"  {
 
     associate_public_ip_address = true
     
-    key_name = aws_key_pair.ssh-key.key_name
+    # key_name = aws_key_pair.ssh-key.key_name
+    key_name = "aws-key-pair"
 
-    user_data = file("entry-script.sh")
+    # user_data = file("entry-script.sh")
 
     tags = {
         Name: "${var.env_prefix}-server"
+    }
+
+    
+
+#     provisioner "remote-exec"   {
+#         inline = [
+#             "cd /home/ubuntu/ansible",
+#             "sudo ansible-playbook --inventory ${self.public_ip}, --private-key ${var.ssh_key_private} --user ec2-user  deploy-docker.yaml"
+#         ]
+
+#         connection  {
+#             type = "ssh"
+#             host = var.ansible_master_servercl
+#             user = "ec2-user"
+#             private_key = file(var.private_key_location)
+#         }
+#     }
+}
+
+
+resource "null_resource" "configure_server" {
+
+    triggers = {
+        trigger = aws_instance.myapp-server.public_ip
+    }
+    provisioner "remote-exec"   {
+        connection  {
+            type = "ssh"
+            host = var.ansible_master_server
+            user = "ubuntu"
+            private_key = file("./aws-key-pair.pem")
+        }
+
+        inline = [
+            "cd /home/ubuntu/ansible",
+            "sudo ansible-playbook --inventory ${aws_instance.myapp-server.public_ip}, --private-key ${var.ssh_key_private} --user ec2-user  deploy-docker.yaml"
+        ]
+
     }
 }
